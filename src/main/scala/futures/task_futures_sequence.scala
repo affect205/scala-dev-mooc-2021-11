@@ -31,4 +31,18 @@ object task_futures_sequence {
       }
       )
   }
+
+  def fullSequence[A](futures: List[Future[A]])
+                     (implicit ex: ExecutionContext): Future[(List[A], List[Throwable])] = {
+    futures.foldLeft[Future[(List[A], List[Throwable])]](Future.successful(List.empty[A], List.empty[Throwable])) {
+      case (acc, future) =>
+        acc.flatMap { case (successList, failureList) =>
+          future.map(value => ((value +: successList), failureList))
+            .recoverWith { case ex =>
+              Future.successful((successList, (ex +: failureList)))
+            }
+        }
+    }
+  }
+
 }
