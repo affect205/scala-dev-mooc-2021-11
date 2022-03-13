@@ -1,34 +1,54 @@
 package module3
 
-import zio.{Has, Task, ULayer, ZIO, ZLayer}
-import zio.clock.{Clock, sleep}
-import zio.console._
-import zio.duration.durationInt
-import zio.macros.accessible
+import module3.zio_homework.config.AppConfig
+import zio.clock.Clock
+import zio.console.{Console, _}
+import zio.duration.Duration
 import zio.random._
+import zio.{RIO, URIO, ZIO}
 
-import java.io.IOException
-import java.util.concurrent.TimeUnit
-import scala.io.StdIn
+import scala.concurrent.duration.MILLISECONDS
 import scala.language.postfixOps
 
 package object zio_homework {
+
+  type ZDI = Console with Clock with Random
+
   /**
    * 1.
    * Используя сервисы Random и Console, напишите консольную ZIO программу которая будет предлагать пользователю угадать число от 1 до 3
    * и печатать в когнсоль угадал или нет. Подумайте, на какие наиболее простые эффекты ее можно декомпозировать.
    */
-
-
-
-  lazy val guessProgram = ???
+  lazy val guessProgram: RIO[ZDI, Unit] = {
+    for {
+      _ <- ZIO.environment[Clock].map(_.get)
+      _ <- ZIO.environment[Console].map(_.get)
+      random <- ZIO.environment[Random].map(_.get)
+      randomVal <- random.nextIntBetween(0, 10)
+      attempts <- doWhile(v => randomVal == v)
+      _ <- putStrLn(s"You have guessed the number $randomVal per $attempts attempts.")
+    } yield()
+  }
 
   /**
    * 2. реализовать функцию doWhile (общего назначения), которая будет выполнять эффект до тех пор, пока его значение в условии не даст true
    * 
    */
-
-  def doWhile = ???
+  def doWhile(predicate: Int => Boolean, attempts: Int = 1): RIO[ZDI, Int] = {
+    for {
+      _ <- putStrLn("Input number between 0 and 9:")
+      input <- getStrLn
+      number <- input match {
+        case x if x.matches("\\d+") => ZIO.succeed(x.toInt)
+        case x => putStrLn(s"Non parsable input '$x'. Used attempts: $attempts. Try again..") *> doWhile(predicate, attempts + 1)
+      }
+      triedAttempts <- if (predicate(number)) {
+        ZIO.succeed(attempts)
+      } else {
+        putStrLn(s"You haven't guessed. Used attempts: $attempts. Try again..") *> doWhile(predicate, attempts + 1)
+      }
+    } yield triedAttempts
+  }
 
   /**
    * 3. Реализовать метод, который безопасно прочитает конфиг из файла, а в случае ошибки вернет дефолтный конфиг
@@ -36,7 +56,15 @@ package object zio_homework {
    * Используйте эффект "load" из пакета config
    */
 
-  def loadConfigOrDefault = ???
+  def loadConfigOrDefault: RIO[Console, Unit] = for {
+    conf <- config.load.orElse(
+      ZIO.effect(AppConfig(
+        appName = "default_app",
+        appUrl = "http://host:8080/path/to/anything")
+      )
+    )
+    _ <- putStrLn(s"App config: $conf")
+  } yield()
 
 
   /**
@@ -50,12 +78,20 @@ package object zio_homework {
    * 4.1 Создайте эффект, который будет возвращать случайеым образом выбранное число от 0 до 10 спустя 1 секунду
    * Используйте сервис zio Random
    */
-  lazy val eff = ???
-
+  def eff(implicit effectDelay: Duration): URIO[ZDI, Int] = {
+    (for {
+      random <- ZIO.environment[Random].map(_.get)
+      randomVal <- random.nextIntBetween(0, 11)
+      _ <- putStrLn(s"Generated value: $randomVal")
+    } yield randomVal).delay(effectDelay)
+  }
   /**
    * 4.2 Создайте коллукцию из 10 выше описанных эффектов (eff)
    */
-  lazy val effects = ???
+  def effects(implicit effectDelay: Duration): Seq[URIO[ZDI, Int]] = for {
+    _ <- 0 until 10
+    effects = eff
+  } yield effects
 
   
   /**
@@ -64,14 +100,25 @@ package object zio_homework {
    * можно использовать ф-цию printEffectRunningTime, которую мы разработали на занятиях
    */
 
-  lazy val app = ???
+  def sumOfValuesApp(implicit effectDelay: Duration): URIO[ZDI, Int] = {
+    zioConcurrency.printEffectRunningTime(
+      for {
+        sumOfElements <- ZIO.foldLeft(effects)(0)((s, a) => a.map(_+s))
+        _ <- putStrLn(s"Sum of elements: $sumOfElements")
+      } yield sumOfElements)
+  }
 
 
   /**
    * 4.4 Усовершенствуйте программу 4.3 так, чтобы минимизировать время ее выполнения
    */
 
-  lazy val appSpeedUp = ???
+  lazy val appSpeedUp: URIO[ZDI, Int] = {
+    implicit val effectDelay: Duration = Duration(100, MILLISECONDS)
+    for {
+      sumOfValues <- sumOfValuesApp
+    } yield sumOfValues
+  }
 
 
   /**
