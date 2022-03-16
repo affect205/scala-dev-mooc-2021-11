@@ -113,7 +113,7 @@ object zioDS {
 
     val updateCounterRef = for{
       counter <- Ref.make(0)
-      _ <- UIO.foreachPar_((1 to 100))(c => counter.get.flatMap(counter.set))
+      _ <- UIO.foreachPar_((1 to 100))(c => counter.get.flatMap(c => counter.set()))
       res <- counter.get
     } yield res
 
