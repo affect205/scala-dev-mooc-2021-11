@@ -79,8 +79,9 @@ object UserRepositorySpec extends DefaultRunnableSpec{
                 checkAllM(usersGen){ user => 
                     for{
                         userRepo <- ZIO.environment[UserRepository.UserRepository].map(_.get)
-                        user <- userRepo.createUser(user)
-                        result <- userRepo.findUser(user.typedId).some.mapError(_ => new Exception("fetch failed"))
+                        _ <- userRepo.createUser(user)
+                        _user <- userRepo.findUser(user.typedId)
+                        result <- userRepo.findUser(_user.get.typedId).some.mapError(_ => new Exception("fetch failed"))
                     } yield assert(user.id)(equalTo(result.id)) &&
                         assert(result.firstName)(equalTo(user.firstName))
                 }
@@ -90,7 +91,7 @@ object UserRepositorySpec extends DefaultRunnableSpec{
                 checkAllM(usersGen, Gen.anyUUID){ (user, id) => 
                     for{
                         userRepo <- ZIO.environment[UserRepository.UserRepository].map(_.get)
-                        user <- userRepo.createUser(user)
+                        _ <- userRepo.createUser(user)
                         result <- userRepo.findUser(UserId(id.toString()))
                     } yield assert(result)(isNone) 
                 }
@@ -99,37 +100,37 @@ object UserRepositorySpec extends DefaultRunnableSpec{
             testM("метод update должен обновлять только целевого пользователя")(
                 for{
                     userRepo <- ZIO.environment[UserRepository.UserRepository].map(_.get)
-                    users <- userRepo.createUsers(users)
-                    user = users.head
+                    _ <- userRepo.createUsers(users)
+                    user <- userRepo.findUser(users.head.typedId)
                     newFirstName = "Petr"
-                    _ <- userRepo.updateUser(user.copy(firstName = newFirstName))
-                    updated <- userRepo.findUser(user.typedId).some.mapError(_ => new Exception("fetch failed"))
+                    _ <- userRepo.updateUser(user.get.copy(firstName = newFirstName))
+                    updated <- userRepo.findUser(user.get.typedId).some.mapError(_ => new Exception("fetch failed"))
                     all <- userRepo.list()
 
                 } yield assert(updated.firstName)(equalTo(newFirstName)) && 
-                    assert(all.filter(_.id != user.id).toSet)(equalTo(users.filter(_.id != user.id).toSet))
+                    assert(all.filter(_.id != user.get.id).toSet)(equalTo(users.filter(_.id != user.get.id).toSet))
 
             ) @@ migrate(),
             testM("метод delete должен удалять только целевого пользователя")(
                 for{
                     userRepo <- ZIO.environment[UserRepository.UserRepository].map(_.get)
-                    users <- userRepo.createUsers(users)
-                    user = users.last
-                    _ <- userRepo.deleteUser(user)
+                    _ <- userRepo.createUsers(users)
+                    user <- userRepo.findUser(users.last.typedId)
+                    _ <- userRepo.deleteUser(user.get)
                     all <- userRepo.list()
 
                 } yield assert(all.length)(equalTo(9)) && 
-                    assert(all.toSet)(equalTo(users.filter(_.id != user.id).toSet))
+                    assert(all.toSet)(equalTo(users.filter(_.id != user.get.id).toSet))
 
             ) @@ migrate(),
             testM("метод findByLastName должен находить пользователя")(
                     for{
                         userRepo <- ZIO.environment[UserRepository.UserRepository].map(_.get)
-                        users <- userRepo.createUsers(users)
-                        user = users(5)
-                        result <- userRepo.findByLastName(user.lastName)
+                        _ <- userRepo.createUsers(users)
+                        user <- userRepo.findUser(users(5).typedId)
+                        result <- userRepo.findByLastName(user.get.lastName)
                     } yield assert(result.length)(equalTo(1)) &&
-                        assert(result.head.lastName)(equalTo(user.lastName))
+                        assert(result.head.lastName)(equalTo(user.get.lastName))
 
             ) @@ migrate(),
 
