@@ -10,8 +10,19 @@ lazy val root = (project in file("."))
     scalaVersion := "2.13.3",
     libraryDependencies ++= Dependencies.zio,
     libraryDependencies ++= Dependencies.pureconfig,
+    libraryDependencies ++= Dependencies.zioConfig,
+    libraryDependencies ++= Dependencies.http4sServer,
+    libraryDependencies ++= Dependencies.circe,
+    libraryDependencies ++= Dependencies.testContainers,
     libraryDependencies ++= Seq(
-      kindProjector
+      "io.getquill"          %% "quill-jdbc-zio" % "3.12.0",
+      "io.github.kitlangton" %% "zio-magic"      % "0.3.11",
+      "org.postgresql"       %  "postgresql"     % "42.3.1"
+    ),
+    libraryDependencies ++= Seq(
+      kindProjector,
+      liquibase,
+      logback
     ),
 
     addCompilerPlugin(Dependencies.kindProjector)

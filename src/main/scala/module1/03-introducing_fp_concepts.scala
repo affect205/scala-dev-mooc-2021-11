@@ -90,6 +90,14 @@ object recursion {
    * F0 = 0, F1 = 1, Fn = Fn-1 + Fn - 2
    *
    */
+  def fib(n: Int): Int = {
+    @tailrec
+    def loop(si: Int, si_1: Int, n: Int): Int = {
+      if (n == 1) si
+      else loop(si + si_1, si, n-1)
+    }
+    if (n == 0) 0 else loop(1, 0, n)
+  }
 
 
 }
