@@ -1,15 +1,9 @@
 package module4.homework.dao.repository
 
-import zio.Has
-
 import io.getquill.context.ZioJdbc.QIO
-import module4.homework.dao.entity.User
-import zio.macros.accessible
-import zio.{ULayer, ZLayer}
-import module4.homework.dao.entity.{Role, UserToRole}
-import module4.homework.dao.entity.UserId
-import module4.homework.dao.entity.RoleCode
+import module4.homework.dao.entity._
 import module4.phoneBook.db
+import zio.{Has, ULayer, ZLayer}
 
 
 object UserRepository{
@@ -22,8 +16,8 @@ object UserRepository{
 
     trait Service{
         def findUser(userId: UserId): QIO[Option[User]]
-        def createUser(user: User): QIO[User]
-        def createUsers(users: List[User]): QIO[List[User]]
+        def createUser(user: User): QIO[Unit]
+        def createUsers(users: List[User]): QIO[Unit]
         def updateUser(user: User): QIO[Unit]
         def deleteUser(user: User): QIO[Unit]
         def findByLastName(lastName: String): QIO[List[User]]
@@ -36,35 +30,67 @@ object UserRepository{
 
     class ServiceImpl extends Service{
 
-        lazy val userSchema = ???
+        lazy val userSchema = quote {
+            querySchema[User](""""User"""")
+        }
 
-        lazy val roleSchema = ???
+        lazy val roleSchema = quote {
+            querySchema[Role](""""Role"""")
+        }
 
-        lazy val userToRoleSchema = ???
+        lazy val userToRoleSchema = quote {
+            querySchema[UserToRole](""""UserToRole"""")
+        }
 
-        def findUser(userId: UserId): Result[Option[User]] = ???
+        def findUser(userId: UserId): Result[Option[User]] =
+            run(userSchema.filter(_.id == lift(userId.id))).map(_.headOption)
+
+        def createUser(user: User): Result[Unit] = {
+            run(userSchema.insert(lift(user))).map(_ => ())
+        }
+
+        def createUsers(users: List[User]): Result[Unit] = {
+            run(liftQuery(users).foreach(u => query[User].insert(u))).map(_ => ())
+        }
+
+        def updateUser(user: User): Result[Unit] =
+            run(userSchema.update(lift(user))).map(_ => ())
+
+        def deleteUser(user: User): Result[Unit] =
+            run(userSchema.filter(_.id == lift(user.id)).delete).map(_ => ())
         
-        def createUser(user: User): Result[User] = ???
+        def findByLastName(lastName: String): Result[List[User]] =
+            run(userSchema.filter(_.lastName == lift(lastName)))
         
-        def createUsers(users: List[User]): Result[List[User]] = ???
+        def list(): Result[List[User]] =
+            run(userSchema)
+
+        def userRoles(userId: UserId): Result[List[Role]] =
+            run(userSchema
+              .filter(_.id == lift(userId.id))
+              .join(userToRoleSchema)
+              .on(_.id == _.userId)
+              .join(roleSchema)
+              .on(_._2.roleId == _.code)
+              .map(_._2)
+            )
+
+        def insertRoleToUser(roleCode: RoleCode, userId: UserId): Result[Unit] =
+            run(userToRoleSchema.insert(lift(UserToRole(roleCode.code, userId.id)))).map(_ => ())
         
-        def updateUser(user: User): Result[Unit] = ???
-        
-        def deleteUser(user: User): Result[Unit] = ???
-        
-        def findByLastName(lastName: String): Result[List[User]] = ???
-        
-        def list(): Result[List[User]] = ???
-        
-        def userRoles(userId: UserId): Result[List[Role]] = ???
-        
-        def insertRoleToUser(roleCode: RoleCode, userId: UserId): Result[Unit] = ???
-        
-        def listUsersWithRole(roleCode: RoleCode): Result[List[User]] = ???
-        
-        def findRoleByCode(roleCode: RoleCode): Result[Option[Role]] = ???
-                
+        def listUsersWithRole(roleCode: RoleCode): Result[List[User]] =
+            run(roleSchema
+              .filter(_.code == lift(roleCode.code))
+              .join(userToRoleSchema)
+              .on(_.code == _.roleId)
+              .join(userSchema)
+              .on(_._2.userId == _.id)
+              .map(_._2)
+            )
+
+        def findRoleByCode(roleCode: RoleCode): Result[Option[Role]] =
+            run(roleSchema.filter(_.code == lift(roleCode.code))).map(_.headOption)
     }
 
-    val live: ULayer[UserRepository] = ???
+    val live: ULayer[UserRepository] = ZLayer.succeed(new ServiceImpl)
 }
